@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trang Học Sinh Chép Từ Vựng Trước Khi Đến Lớp — QuizletVN</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-3 sm:p-6 lg:p-8">
+
+  <div class="max-w-5xl mx-auto space-y-5">
+    <!-- Header Banner -->
+    <div class="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 text-white p-5 sm:p-7 rounded-3xl shadow-lg space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <a href="/" class="px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold backdrop-blur-sm transition flex items-center gap-1.5">
+          <span>← Mở Trang Chủ QuizletVN</span>
+        </a>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="toggleHideMeaning()" id="hideMeaningBtn" class="px-3 py-1.5 rounded-xl bg-white text-teal-900 hover:bg-teal-50 text-xs font-extrabold shadow-sm transition">
+            👁️ Ẩn nghĩa tiếng Việt để tự dò bài
+          </button>
+          <button type="button" onclick="window.print()" class="px-3 py-1.5 rounded-xl bg-amber-300 text-slate-950 hover:bg-amber-200 text-xs font-extrabold shadow-sm transition">
+            🖨️ In / Lưu PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="space-y-1.5">
+        <div class="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-white/20 text-xs font-bold uppercase tracking-wider">
+          <span>📖 BẢNG TỪ VỰNG DÀNH CHO HỌC SINH CHÉP BÀI TRƯỚC</span>
+        </div>
+        <h1 id="folderTitleDisplay" class="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          📁 Đang tải thư mục từ vựng...
+        </h1>
+        <p id="folderDescDisplay" class="text-xs sm:text-sm text-emerald-100">
+          Hướng dẫn: Học sinh nghe phát âm chuẩn tiếng Anh (🔊), ghi chép cẩn thận Từ vựng, Phiên âm IPA, Loại từ và Nghĩa vào vở, sau đó tích chọn ☑️ vào ô "Đã chép".
+        </p>
+      </div>
+
+      <!-- Progress Tracking -->
+      <div class="bg-black/20 p-4 rounded-2xl backdrop-blur-sm space-y-2">
+        <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+          <span id="progressText">Tiến độ chép bài: 0 / 0 từ vựng (0%)</span>
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="markAllWords(true)" class="underline hover:text-amber-200">Tích chọn tất cả đã chép</button>
+            <span class="opacity-50">•</span>
+            <button type="button" onclick="markAllWords(false)" class="underline hover:text-amber-200">Bỏ tích tất cả</button>
+          </div>
+        </div>
+        <div class="w-full h-2.5 bg-white/20 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-amber-300 transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
+      <div class="flex-1 max-w-md">
+        <input
+          type="text"
+          id="searchInput"
+          oninput="renderSets()"
+          placeholder="🔍 Tìm nhanh từ vựng, phiên âm IPA, nghĩa..."
+          class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium focus:outline-none focus:border-emerald-500"
+        />
+      </div>
+      <div class="text-xs text-slate-500 font-semibold">
+        Tự động lưu tiến độ trên điện thoại / máy tính của bạn
+      </div>
+    </div>
+
+    <!-- Vocabulary Sets Container -->
+    <div id="setsContainer" class="space-y-5">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <script>
+    let folderData = { name: '', icon: '📁', sets: [] };
+    let copiedMap = {};
+    let hideMeaning = false;
+
+    // Lấy tên thư mục từ URL: /share/:name hoặc /notebook/:name hoặc ?folder=:name
+    function getTargetFolderName() {
+      const pathParts = window.location.pathname.split('/').filter(Boolean);
+      if (pathParts.length >= 2 && (pathParts[0] === 'share' || pathParts[0] === 'notebook')) {
+        return decodeURIComponent(pathParts[1]);
+      }
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('folder')) return params.get('folder');
+      return 'IELTS & Học thuật';
+    }
+
+    // Tải dữ liệu từ Server API hoặc Fallback
+    async function loadFolderData() {
+      const folderName = getTargetFolderName();
+      loadCopiedStorage();
+
+      try {
+        const resp = await fetch(`/api/share/${encodeURIComponent(folderName)}`);
+        if (resp.ok) {
+          const res = await resp.json();
+          if (res.ok && res.folder) {
+            folderData = res.folder;
+            renderAll();
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // Fallback nếu chạy offline hoặc giải mã từ hash #notebook=
+      if (window.location.hash.startsWith('#notebook=')) {
+        try {
+          const b64 = window.location.hash.replace('#notebook=', '');
+          const jsonStr = decodeURIComponent(escape(atob(b64)));
+          const parsed = JSON.parse(jsonStr);
+          folderData = {
+            name: parsed.n || folderName,
+            icon: parsed.i || '📁',
+            desc: parsed.d || '',
+            sets: (parsed.s || []).map(s => ({
+              title: s.t,
+              terms: (s.w || []).map((w, idx) => ({
+                id: `w_${idx}`,
+                term: w.e,
+                ipa: w.p,
+                pos: w.k,
+                definition: w.v,
+                note: w.x
+              }))
+            }))
+          };
+          renderAll();
+          return;
+        } catch (err) {}
+      }
+
+      // Fallback mặc định
+      folderData = {
+        name: folderName,
+        icon: '📁',
+        desc: 'Danh sách từ vựng chuẩn bị cho bài học',
+        sets: []
+      };
+      renderAll();
+    }
+
+    function loadCopiedStorage() {
+      try {
+        const raw = localStorage.getItem('quizlet_student_copied_v1');
+        if (raw) copiedMap = JSON.parse(raw);
+      } catch (e) {
+        copiedMap = {};
+      }
+    }
+
+    function saveCopiedStorage() {
+      try {
+        localStorage.setItem('quizlet_student_copied_v1', JSON.stringify(copiedMap));
+      } catch (e) {}
+    }
+
+    function toggleWordCopied(wKey) {
+      copiedMap[wKey] = !copiedMap[wKey];
+      saveCopiedStorage();
+      updateProgress();
+      const row = document.getElementById(`row_${wKey}`);
+      if (row) {
+        if (copiedMap[wKey]) {
+          row.classList.add('bg-emerald-50/70');
+          row.querySelector('.term-text')?.classList.add('line-through', 'text-emerald-700');
+        } else {
+          row.classList.remove('bg-emerald-50/70');
+          row.querySelector('.term-text')?.classList.remove('line-through', 'text-emerald-700');
+        }
+      }
+    }
+
+    function markAllWords(status) {
+      (folderData.sets || []).forEach(s => {
+        (s.terms || []).forEach(t => {
+          copiedMap[`${s.title}_${t.term}`] = status;
+        });
+      });
+      saveCopiedStorage();
+      renderSets();
+    }
+
+    function toggleHideMeaning() {
+      hideMeaning = !hideMeaning;
+      const btn = document.getElementById('hideMeaningBtn');
+      if (hideMeaning) {
+        btn.textContent = '👁️ Đang ẩn nghĩa (Bấm để hiện lại)';
+        btn.className = 'px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 font-extrabold text-xs shadow-sm transition';
+      } else {
+        btn.textContent = '👁️ Ẩn nghĩa tiếng Việt để tự dò bài';
+        btn.className = 'px-3 py-1.5 rounded-xl bg-white text-teal-900 hover:bg-teal-50 text-xs font-extrabold shadow-sm transition';
+      }
+      document.querySelectorAll('.def-text').forEach(el => {
+        if (hideMeaning) el.classList.add('blur-sm', 'select-none');
+        else el.classList.remove('blur-sm', 'select-none');
+      });
+    }
+
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'en-US';
+        utter.rate = 0.92;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function updateProgress() {
+      let total = 0;
+      let copied = 0;
+      (folderData.sets || []).forEach(s => {
+        (s.terms || []).forEach(t => {
+          total++;
+          if (copiedMap[`${s.title}_${t.term}`]) copied++;
+        });
+      });
+      const pct = total > 0 ? Math.round((copied / total) * 100) : 0;
+      document.getElementById('progressText').textContent =
+        `Tiến độ chép bài: ${copied} / ${total} từ vựng (${pct}%)`;
+      document.getElementById('progressBar').style.width = `${pct}%`;
+    }
+
+    function renderAll() {
+      document.getElementById('folderTitleDisplay').textContent =
+        `${folderData.icon || '📁'} Thư mục: ${folderData.name || 'Từ vựng học tập'}`;
+      document.title = `Chép từ: ${folderData.name || 'Từ vựng'} — QuizletVN`;
+      if (folderData.desc) {
+        document.getElementById('folderDescDisplay').textContent = folderData.desc;
+      }
+      renderSets();
+    }
+
+    function renderSets() {
+      const container = document.getElementById('setsContainer');
+      const query = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+      updateProgress();
+
+      if (!folderData.sets || folderData.sets.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white p-8 rounded-3xl border border-slate-200 text-center space-y-2">
+            <p class="text-3xl">📭</p>
+            <h3 class="font-bold text-slate-800">Thư mục này chưa có từ vựng nào</h3>
+            <p class="text-xs text-slate-500">Giáo viên có thể thêm từ vựng từ trang chủ QuizletVN.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = folderData.sets.map((s, sIdx) => {
+        const filteredTerms = (s.terms || []).filter(t => {
+          if (!query) return true;
+          return (t.term || '').toLowerCase().includes(query) ||
+                 (t.definition || '').toLowerCase().includes(query) ||
+                 (t.ipa || '').toLowerCase().includes(query);
+        });
+
+        if (filteredTerms.length === 0) return '';
+
+        const rows = filteredTerms.map((t, idx) => {
+          const wKey = `${s.title}_${t.term}`;
+          const isCopied = Boolean(copiedMap[wKey]);
+
+          return `
+            <tr id="row_${wKey}" class="border-b border-slate-100 transition ${isCopied ? 'bg-emerald-50/70' : 'hover:bg-slate-50'}">
+              <td class="p-3.5 text-center">
+                <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    ${isCopied ? 'checked' : ''}
+                    onchange="toggleWordCopied('${wKey.replace(/'/g, "\\'")}')"
+                    class="w-4 h-4 rounded text-emerald-600 focus:ring-0 cursor-pointer"
+                  />
+                  <span class="text-xs font-bold text-slate-400">#${idx + 1}</span>
+                </label>
+              </td>
+              <td class="p-3.5">
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onclick="speakText('${t.term.replace(/'/g, "\\'")}')"
+                    class="p-1.5 rounded-lg bg-indigo-50 text-[#4255ff] hover:bg-indigo-100 transition shrink-0"
+                    title="Nghe phát âm chuẩn"
+                  >
+                    🔊
+                  </button>
+                  <span class="font-extrabold text-base term-text ${isCopied ? 'line-through text-emerald-700' : 'text-slate-900'}">
+                    ${t.term}
+                  </span>
+                </div>
+              </td>
+              <td class="p-3.5">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  ${t.ipa ? `<span class="font-mono text-xs font-semibold text-[#4255ff] bg-indigo-50 px-2.5 py-0.5 rounded-full">${t.ipa}</span>` : ''}
+                  ${t.pos ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-700">${t.pos}</span>` : ''}
+                </div>
+              </td>
+              <td class="p-3.5">
+                <p class="text-sm font-semibold text-slate-800 def-text ${hideMeaning ? 'blur-sm select-none' : ''}">
+                  ${t.definition}
+                </p>
+              </td>
+              <td class="p-3.5">
+                <p class="text-xs italic text-slate-500">
+                  ${t.note ? `"${t.note}"` : '—'}
+                </p>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h2 class="font-extrabold text-base text-slate-900">
+                📚 Bộ ${sIdx + 1}: ${s.title}
+              </h2>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-[#4255ff]">
+                ${filteredTerms.length} từ vựng
+              </span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-slate-100/70 text-[11px] font-extrabold uppercase text-slate-500">
+                    <th class="p-3 text-center w-24">Đã chép</th>
+                    <th class="p-3">Từ vựng (English)</th>
+                    <th class="p-3">Phiên âm IPA & Loại từ</th>
+                    <th class="p-3">Nghĩa tiếng Việt</th>
+                    <th class="p-3">Câu ví dụ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.onload = loadFolderData;
+  </script>
+</body>
+</html>

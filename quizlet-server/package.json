@@ -1,0 +1,24 @@
+{
+  "name": "quizlet-vn-server",
+  "version": "1.0.0",
+  "description": "Máy chủ QuizletVN — Nền tảng học thẻ ghi nhớ, trò chơi từ vựng & trang chép từ cho học sinh",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "quizlet",
+    "flashcards",
+    "vocabulary",
+    "english",
+    "server",
+    "education"
+  ],
+  "author": "QuizletVN",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
+}
