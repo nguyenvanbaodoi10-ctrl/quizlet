@@ -1,0 +1,7 @@
+{
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/share/:folder*", "destination": "/student.html" },
+    { "source": "/notebook/:folder*", "destination": "/student.html" }
+  ]
+}
